@@ -115,9 +115,14 @@ else
 fi
 
 # MH8: Chat vẫn work
+# NOTE: dùng heredoc + --data-binary để giữ UTF-8 nguyên vẹn
+# (Git Bash trên Windows mangle UTF-8 khi truyền qua argv `-d`).
 echo "[5] Chat API vẫn hoạt động..."
 CHAT=$(curl -sf -X POST "$API/chat" -H "Content-Type: application/json" \
-  -d '{"question":"InsightHub có mấy thành phần chính?"}' 2>/dev/null)
+  --data-binary @- <<'JSON' 2>/dev/null
+{"question":"InsightHub có mấy thành phần chính?"}
+JSON
+)
 if echo "$CHAT" | grep -q '"answer"'; then
   ok "POST /chat trả về answer"
 else

@@ -58,6 +58,8 @@ def process_document(document_id: int, filename: str, content: bytes) -> int:
 
     with get_conn() as conn:
         with conn.transaction():
+            # Idempotent: ARQ có thể retry — xóa chunks cũ trước khi insert.
+            conn.execute("DELETE FROM chunks WHERE document_id = %s", (document_id,))
             for chunk, vector in zip(chunks, vectors):
                 conn.execute(
                     """
