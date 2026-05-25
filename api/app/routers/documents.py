@@ -1,17 +1,16 @@
 """
 InsightHub API — Documents router
-Upload tài liệu và xem trạng thái.
 
-⚠️  Day 1 refactor: endpoint upload hiện gọi ingest ĐỒNG BỘ.
-Sau refactor sẽ: lưu metadata → enqueue ARQ job → trả về 202 ngay.
+Day 1 refactor: upload chỉ lưu metadata + enqueue ARQ job, trả 202 ngay.
+Worker (ingestion-worker) sẽ xử lý chunk/embed/store bất đồng bộ.
 """
 import logging
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse
 
 from app.core.db import get_conn
 from app.core.metrics import documents_total, ingestion_errors_total
-from app.services.ingestion import ingest_document_sync
 
 logger = logging.getLogger("insighthub.routers.documents")
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -20,8 +19,8 @@ ALLOWED_EXT = (".txt", ".md", ".pdf")
 MAX_SIZE_MB = 10
 
 
-@router.post("", status_code=201)
-async def upload_document(file: UploadFile):
+@router.post("", status_code=202)
+async def upload_document(file: UploadFile, request: Request):
     if not file.filename or not file.filename.lower().endswith(ALLOWED_EXT):
         raise HTTPException(400, f"Chỉ chấp nhận: {', '.join(ALLOWED_EXT)}")
 
@@ -37,19 +36,39 @@ async def upload_document(file: UploadFile):
         ).fetchone()
         document_id = row[0]
 
-    # ⚠️  ĐIỂM YẾU v0: ingest đồng bộ — request bị block tới khi xong.
-    # Day 1: thay bằng redis.enqueue_job("ingest", document_id, filename, content)
+    # Enqueue ARQ job — worker sẽ dequeue và xử lý
+    redis = request.app.state.arq_pool
     try:
-        chunk_count = ingest_document_sync(document_id, file.filename, content)
+        await redis.enqueue_job("ingest_document", document_id, file.filename, content)
     except Exception as exc:  # noqa: BLE001
         ingestion_errors_total.inc()
-        raise HTTPException(500, f"Ingestion thất bại: {exc}") from exc
+        logger.exception("Enqueue thất bại cho document %s", document_id)
+        raise HTTPException(503, f"Queue không khả dụng: {exc}") from exc
 
+    return JSONResponse(
+        status_code=202,
+        content={
+            "id": document_id,
+            "filename": file.filename,
+            "status": "pending",
+        },
+    )
+
+
+@router.get("/{document_id}/status")
+async def get_document_status(document_id: int):
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, filename, status, chunk_count FROM documents WHERE id = %s",
+            (document_id,),
+        ).fetchone()
+    if row is None:
+        raise HTTPException(404, "Không tìm thấy tài liệu")
     return {
-        "id": document_id,
-        "filename": file.filename,
-        "status": "ready",
-        "chunk_count": chunk_count,
+        "id": row[0],
+        "filename": row[1],
+        "status": row[2],
+        "chunk_count": row[3],
     }
 
 

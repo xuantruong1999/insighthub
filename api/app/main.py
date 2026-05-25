@@ -5,6 +5,8 @@ RAG Notebook API gateway. Chạy: uvicorn app.main:app
 import logging
 from contextlib import asynccontextmanager
 
+from arq import create_pool
+from arq.connections import RedisSettings
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -22,9 +24,13 @@ logger = logging.getLogger("insighthub.main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    get_pool()  # mở connection pool khi khởi động
+    get_pool()  # mở DB connection pool khi khởi động
+    app.state.arq_pool = await create_pool(
+        RedisSettings.from_dsn(settings.redis_url)
+    )
     logger.info("InsightHub API started — env=%s", settings.environment)
     yield
+    await app.state.arq_pool.close()
     close_pool()
     logger.info("InsightHub API stopped")
 
