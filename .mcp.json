@@ -1,0 +1,48 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem@2026.1.14",
+        "${INSIGHTHUB_ROOT}"
+      ]
+    },
+    "docker": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "docker-mcp-server@2.1.1"
+      ]
+    },
+    "prometheus": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "prometheus-mcp-server@1.0.1"
+      ],
+      "env": {
+        "PROMETHEUS_URL": "${PROMETHEUS_URL}"
+      }
+    },
+    "kubernetes": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "kubernetes-mcp-server@0.0.62",
+        "--read-only"
+      ],
+      "env": {
+        "KUBECONFIG": "${KUBECONFIG}"
+      }
+    },
+    "postgres": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres@0.6.2",
+        "${DATABASE_URL}"
+      ]
+    }
+  }
+}
