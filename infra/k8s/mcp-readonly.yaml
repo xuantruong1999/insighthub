@@ -1,0 +1,105 @@
+---
+# Day 2 — Read-only ServiceAccount for Kubernetes MCP server.
+#
+# Purpose: Claude Code (via kubernetes-mcp-server) must be able to inspect
+# InsightHub pods/logs/events for debugging, but MUST NOT be able to mutate
+# cluster state. This file defines the SA + read-only ClusterRole + binding.
+#
+# Apply:
+#   kubectl create namespace insighthub --dry-run=client -o yaml | kubectl apply -f -
+#   kubectl apply -f infra/k8s/mcp-readonly.yaml
+#
+# Verify least-privilege (both must return as shown):
+#   kubectl auth can-i get pods    --as=system:serviceaccount:insighthub:mcp-readonly   # yes
+#   kubectl auth can-i delete pods --as=system:serviceaccount:insighthub:mcp-readonly   # no
+#   kubectl auth can-i create deployments --as=system:serviceaccount:insighthub:mcp-readonly  # no
+#
+# Generate a kubeconfig that uses this SA (writes ~/.kube/mcp-viewer.kubeconfig):
+#   see scripts/gen-mcp-kubeconfig.sh (Day 2 helper) — or follow the manual
+#   recipe in docs/lab-guides/Day2-MCP-Protocol.md §Bước 1.
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mcp-readonly
+  namespace: insighthub
+  labels:
+    app.kubernetes.io/part-of: insighthub
+    app.kubernetes.io/component: mcp
+    insighthub.day: "2"
+---
+# Cluster-wide read-only role. Verbs intentionally limited to get/list/watch.
+# No create/update/patch/delete — RBAC is the blast-radius limiter, not the
+# MCP server's good intentions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: mcp-readonly
+  labels:
+    app.kubernetes.io/part-of: insighthub
+    app.kubernetes.io/component: mcp
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - pods/log
+      - pods/status
+      - services
+      - endpoints
+      - configmaps
+      - events
+      - namespaces
+      - nodes
+      - persistentvolumeclaims
+      - replicationcontrollers
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - replicasets
+      - statefulsets
+      - daemonsets
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - cronjobs
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+      - networkpolicies
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources:
+      - pods
+      - nodes
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: mcp-readonly
+  labels:
+    app.kubernetes.io/part-of: insighthub
+    app.kubernetes.io/component: mcp
+subjects:
+  - kind: ServiceAccount
+    name: mcp-readonly
+    namespace: insighthub
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: mcp-readonly
+---
+# Long-lived token for the SA (k8s 1.24+ no longer auto-creates one).
+# This token is what the kubeconfig will reference.
+# Rotate by deleting + recreating; the kubeconfig must be regenerated.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mcp-readonly-token
+  namespace: insighthub
+  annotations:
+    kubernetes.io/service-account.name: mcp-readonly
+type: kubernetes.io/service-account-token
