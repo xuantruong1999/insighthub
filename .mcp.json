@@ -9,10 +9,13 @@
       ]
     },
     "docker": {
-      "command": "npx",
+      "command": "docker",
       "args": [
-        "-y",
-        "docker-mcp-server@2.1.1"
+        "mcp",
+        "gateway",
+        "run",
+        "--servers",
+        "docker"
       ]
     },
     "prometheus": {
