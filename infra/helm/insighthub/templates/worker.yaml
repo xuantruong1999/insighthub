@@ -1,0 +1,66 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingestion-worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: ingestion-worker
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ingestion-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ingestion-worker
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        {{- if .Values.worker.runAsUser }}
+        runAsUser: {{ .Values.worker.runAsUser }}
+        {{- end }}
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ingestion-worker
+          image: {{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}
+          imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.db.passwordSecretName }}
+                  key: {{ .Values.db.passwordSecretKey }}
+            - name: DATABASE_URL
+              value: "postgresql://{{ .Values.db.username }}:$(DB_PASSWORD)@{{ .Values.db.host }}:{{ .Values.db.port }}/{{ .Values.db.name }}"
+            {{- range $key, $value := .Values.worker.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: insighthub-api-keys
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          readinessProbe:
+            exec:
+              command: ["python3", "-c", "import arq; print('ready')"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command: ["python3", "-c", "import arq; print('alive')"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3

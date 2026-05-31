@@ -1,0 +1,130 @@
+{{- if .Values.postgres.enabled }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-credentials
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+type: Opaque
+stringData:
+  POSTGRES_USER: {{ .Values.postgres.credentials.username | quote }}
+  POSTGRES_PASSWORD: {{ .Values.postgres.credentials.password | quote }}
+  POSTGRES_DB: {{ .Values.postgres.credentials.database | quote }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ .Values.postgres.persistence.size }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      automountServiceAccountToken: false
+      {{- if .Values.postgres.podSecurityContext }}
+      securityContext:
+        {{- toYaml .Values.postgres.podSecurityContext | nindent 8 }}
+      {{- else }}
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      {{- end }}
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}
+          imagePullPolicy: {{ .Values.postgres.image.pullPolicy }}
+          {{- if .Values.postgres.containerSecurityContext }}
+          securityContext:
+            {{- toYaml .Values.postgres.containerSecurityContext | nindent 12 }}
+          {{- else }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          {{- end }}
+          envFrom:
+            - secretRef:
+                name: postgres-credentials
+          ports:
+            - containerPort: 5432
+              name: postgres
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+            - name: init-sql
+              mountPath: /docker-entrypoint-initdb.d/init.sql
+              subPath: init.sql
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "exec pg_isready -U \"$POSTGRES_USER\" -h 127.0.0.1 -p 5432"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "exec pg_isready -U \"$POSTGRES_USER\" -h 127.0.0.1 -p 5432"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.postgres.resources | nindent 12 }}
+      volumes:
+        - name: pgdata
+          {{- if .Values.postgres.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: init-sql
+          configMap:
+            name: postgres-init-sql
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  type: ClusterIP
+{{- end }}
