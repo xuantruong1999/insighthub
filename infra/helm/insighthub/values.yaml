@@ -32,6 +32,7 @@ api:
     voyageApiKey: ""
 
   irsa:
+    # Populate from Terraform: helm upgrade --set api.irsa.roleArn=$(terraform -chdir=infra output -raw irsa_role_arn)
     roleArn: ""
 
   resources:
