@@ -49,3 +49,12 @@ module "elasticache" {
   kms_key_arn              = aws_kms_key.main.arn
   node_type                = var.redis_node_type
 }
+
+module "irsa" {
+  source            = "./modules/irsa"
+  oidc_provider_arn = var.oidc_provider_arn
+  oidc_provider_url = var.oidc_provider_url
+  namespace         = var.namespace
+  secret_arns       = [module.rds.secret_arn, module.elasticache.secret_arn]
+  kms_key_arn       = aws_kms_key.main.arn
+}
