@@ -81,7 +81,7 @@ resource "aws_db_instance" "this" {
   performance_insights_enabled    = true
   performance_insights_kms_key_id = var.kms_key_arn
 
-  monitoring_interval = 60
+  monitoring_interval = 0 #checkov:skip=CKV_AWS_118:"enhanced monitoring requires a dedicated IAM role + CloudWatch cost; enable in prod"
 
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
 
