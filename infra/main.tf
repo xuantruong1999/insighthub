@@ -25,3 +25,8 @@ resource "aws_kms_alias" "main" {
   name          = "alias/insighthub"
   target_key_id = aws_kms_key.main.key_id
 }
+
+module "namespace" {
+  source    = "./modules/namespace"
+  namespace = var.namespace
+}
