@@ -1,0 +1,36 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-sql
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  init.sql: |
+    CREATE EXTENSION IF NOT EXISTS vector;
+
+    CREATE TABLE IF NOT EXISTS documents (
+        id          BIGSERIAL PRIMARY KEY,
+        filename    TEXT NOT NULL,
+        status      TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending', 'ready', 'failed')),
+        chunk_count INTEGER NOT NULL DEFAULT 0,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS chunks (
+        id          BIGSERIAL PRIMARY KEY,
+        document_id BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        chunk_text  TEXT NOT NULL,
+        embedding   VECTOR(1024),
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE INDEX IF NOT EXISTS chunks_embedding_hnsw_idx
+        ON chunks USING hnsw (embedding vector_cosine_ops)
+        WITH (m = 16, ef_construction = 64);
+
+    CREATE INDEX IF NOT EXISTS chunks_document_id_idx ON chunks(document_id);
+    CREATE INDEX IF NOT EXISTS documents_status_idx ON documents(status);

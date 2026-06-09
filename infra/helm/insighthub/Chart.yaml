@@ -1,0 +1,13 @@
+apiVersion: v2
+name: insighthub
+description: InsightHub RAG Notebook — Helm chart for Kubernetes deployment
+type: application
+version: 0.3.0
+appVersion: "1.0.0"
+maintainers:
+  - name: platform-team
+    email: platform@example.com
+keywords:
+  - rag
+  - ai
+  - devops

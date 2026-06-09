@@ -1,0 +1,165 @@
+# InsightHub Helm values — minikube / dev environment
+# Usage: helm upgrade --install insighthub ./helm/insighthub -f helm/values-dev.yaml -n insighthub-dev
+
+global:
+  environment: dev
+  imageRegistry: ""  # use local minikube registry (eval $(minikube docker-env))
+
+# ── API ───────────────────────────────────────────────────────────────────────
+api:
+  replicaCount: 1
+  image:
+    repository: insighthub-api
+    tag: latest
+    pullPolicy: Never   # minikube: image built locally
+
+  service:
+    type: NodePort
+    port: 8000
+    nodePort: 30080
+
+  env:
+    REDIS_URL: "redis://redis:6379"
+    LLM_PROVIDER: "gemini"
+    EMBEDDING_PROVIDER: "gemini"
+    EMBEDDING_DIM: "1024"
+
+  envFromSecret:
+    - secretName: insighthub-api-keys
+      keys:
+        - GEMINI_API_KEY
+
+  # minikube: appuser UID=1001 (string name → K8s cần numeric UID để verify runAsNonRoot)
+  runAsUser: 1001
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: 8000
+    initialDelaySeconds: 15
+    periodSeconds: 10
+
+  readinessProbe:
+    httpGet:
+      path: /readyz
+      port: 8000
+    initialDelaySeconds: 10
+    periodSeconds: 5
+
+# ── Ingestion Worker ─────────────────────────────────────────────────────────
+worker:
+  replicaCount: 1
+  image:
+    repository: insighthub-worker
+    tag: latest
+    pullPolicy: Never
+
+  env:
+    REDIS_URL: "redis://redis:6379"
+    LLM_PROVIDER: "gemini"
+    EMBEDDING_PROVIDER: "gemini"
+    EMBEDDING_DIM: "1024"
+
+  envFromSecret:
+    - secretName: insighthub-api-keys
+      keys:
+        - GEMINI_API_KEY
+
+  runAsUser: 1001
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# ── Web ───────────────────────────────────────────────────────────────────────
+web:
+  replicaCount: 1
+  image:
+    repository: insighthub-web
+    tag: latest
+    pullPolicy: Never
+
+  service:
+    type: NodePort
+    port: 3000
+    nodePort: 30030
+
+  runAsUser: 1001
+
+  env:
+    API_INTERNAL_URL: "http://api:8000"
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# ── PostgreSQL (pgvector) ─────────────────────────────────────────────────────
+postgres:
+  enabled: true
+  image:
+    repository: pgvector/pgvector
+    tag: "0.8.2-pg16"
+    pullPolicy: IfNotPresent
+
+  persistence:
+    enabled: true
+    size: 5Gi
+
+  # minikube: pgvector entrypoint starts as root, chown data dir, then gosu postgres.
+  # Drop ALL capabilities blocks CHOWN+SETUID; use minimal drop for dev only.
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["NET_RAW"]
+
+  credentials:
+    database: insighthub
+    username: insighthub
+    password: insighthub  # dev only — prod uses Secrets Manager
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# ── Redis ─────────────────────────────────────────────────────────────────────
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: "7-alpine"
+    pullPolicy: IfNotPresent
+
+  persistence:
+    enabled: false  # dev: ephemeral is fine
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
