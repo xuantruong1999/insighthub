@@ -1,3 +1,8 @@
+locals {
+  db_username = "insighthub"
+  db_name     = "insighthub"
+}
+
 resource "random_password" "db" {
   length  = 32
   special = false # avoid RDS-invalid chars (/, @, ", space)
@@ -12,9 +17,9 @@ resource "aws_secretsmanager_secret" "db" {
 resource "aws_secretsmanager_secret_version" "db" {
   secret_id = aws_secretsmanager_secret.db.id
   secret_string = jsonencode({
-    username = "insighthub"
+    username = local.db_username
     password = random_password.db.result
-    dbname   = "insighthub"
+    dbname   = local.db_name
   })
 }
 
@@ -62,8 +67,8 @@ resource "aws_db_instance" "this" {
   storage_encrypted = true
   kms_key_id        = var.kms_key_arn
 
-  db_name  = "insighthub"
-  username = "insighthub"
+  db_name  = local.db_name
+  username = local.db_username
   password = random_password.db.result
 
   db_subnet_group_name   = aws_db_subnet_group.this.name
