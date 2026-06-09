@@ -49,3 +49,8 @@ ingestion_errors_total = Counter(
     "insighthub_ingestion_errors_total",
     "Số lần ingestion thất bại",
 )
+
+ingestion_queue_depth = Gauge(
+    "insighthub_ingestion_queue_depth",
+    "Số job ingestion đang chờ trong ARQ queue",
+)
