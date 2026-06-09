@@ -45,6 +45,9 @@ jobs:
         uses: bridgecrewio/checkov-action@v12
         with:
           directory: infra
+          # Day 3 gate is the Terraform IaC; Helm/k8s manifests (Day 1-2) are scanned
+          # in their own context. Scoping here keeps this the IaC policy gate.
+          framework: terraform
           soft_fail_on: LOW,MEDIUM
           output_format: cli
           quiet: true
