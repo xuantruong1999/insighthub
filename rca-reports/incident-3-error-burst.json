@@ -1,0 +1,29 @@
+{
+  "incident_id": "incident-3-error-burst",
+  "data_source": "illustrative",
+  "note": "Giá trị metric dưới đây là MINH HOẠ (expected), KHÔNG phải số đo thật từ cluster. Khi chạy live (scale postgres=0 + upload), thay bằng giá trị Prometheus quan sát được rồi đổi data_source thành 'observed'.",
+  "detected_at": "2026-06-09T00:00:00Z",
+  "symptom": "Ingestion thất bại hàng loạt; HTTP 5xx tăng đột biến.",
+  "affected_service": "api / postgres",
+  "injection_method": "kubectl scale deployment postgres --replicas=0, sau đó upload 10 document.",
+  "queries_used": [
+    "rate(insighthub_ingestion_errors_total[5m])",
+    "rate(insighthub_http_requests_total{status=~\"5..\"}[5m])"
+  ],
+  "metrics_observed": {
+    "rate(insighthub_ingestion_errors_total[5m])": "0.4/s (illustrative)",
+    "rate(insighthub_http_requests_total{status=~\"5..\"}[5m])": "0.5/s (illustrative)"
+  },
+  "top_hypotheses": [
+    {
+      "hypothesis": "Postgres không reachable (down/DATABASE_URL sai) nên ingestion lỗi.",
+      "confidence": 0.9,
+      "evidence": [
+        "insighthub_ingestion_errors_total tăng đột biến (rate 0.4/s, illustrative)",
+        "http_requests_total{status=5xx} tăng cùng lúc (rate 0.5/s, illustrative)",
+        "postgres pod replicas=0 / connection refused trong log api"
+      ]
+    }
+  ],
+  "recommended_fix": "Khôi phục postgres; sửa DATABASE_URL; thêm readiness gate + circuit breaker cho DB."
+}

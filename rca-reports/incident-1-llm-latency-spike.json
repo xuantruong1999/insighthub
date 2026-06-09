@@ -1,0 +1,29 @@
+{
+  "incident_id": "incident-1-llm-latency-spike",
+  "data_source": "illustrative",
+  "note": "Giá trị metric dưới đây là MINH HOẠ (expected), KHÔNG phải số đo thật từ cluster. Khi chạy live (loadgen + burst trên minikube + kube-prometheus-stack), thay bằng giá trị Prometheus quan sát được rồi đổi data_source thành 'observed'.",
+  "detected_at": "2026-06-09T00:00:00Z",
+  "symptom": "RAG response chậm; LLM call latency p95 tăng đột biến vượt anomaly band.",
+  "affected_service": "api",
+  "injection_method": "Bơm 20 request /chat đồng thời để đẩy insighthub:llm_latency:p95 vượt upper_band.",
+  "queries_used": [
+    "insighthub:llm_latency:p95",
+    "insighthub:llm_latency:p95_upper_band",
+    "sum(rate(insighthub_rag_query_latency_seconds_count[5m]))"
+  ],
+  "metrics_observed": {
+    "insighthub:llm_latency:p95": "8.4s (illustrative)",
+    "insighthub:llm_latency:p95_upper_band": "3.1s (illustrative)"
+  },
+  "top_hypotheses": [
+    {
+      "hypothesis": "LLM provider trả chậm do nhiều request đồng thời / rate limit.",
+      "confidence": 0.8,
+      "evidence": [
+        "insighthub:llm_latency:p95 = 8.4s > upper_band = 3.1s (illustrative)",
+        "RAG query rate tăng cùng thời điểm (rate(insighthub_rag_query_latency_seconds_count[5m]))"
+      ]
+    }
+  ],
+  "recommended_fix": "Thêm concurrency limit / retry-backoff cho LLM call; cân nhắc cache hoặc provider nhanh hơn."
+}
