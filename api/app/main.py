@@ -2,6 +2,7 @@
 InsightHub API — Application entrypoint
 RAG Notebook API gateway. Chạy: uvicorn app.main:app
 """
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -15,6 +16,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from app.core.config import get_settings
 from app.core.db import close_pool, get_pool
 from app.core.metrics import http_requests_total
+from app.core.queue_metrics import queue_depth_loop
 from app.routers import chat, documents, health
 
 settings = get_settings()
@@ -28,8 +30,12 @@ async def lifespan(app: FastAPI):
     app.state.arq_pool = await create_pool(
         RedisSettings.from_dsn(settings.redis_url)
     )
+    app.state.queue_task = asyncio.create_task(
+        queue_depth_loop(app.state.arq_pool)
+    )
     logger.info("InsightHub API started — env=%s", settings.environment)
     yield
+    app.state.queue_task.cancel()
     await app.state.arq_pool.close()
     close_pool()
     logger.info("InsightHub API stopped")
