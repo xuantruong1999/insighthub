@@ -1,0 +1,45 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: insighthub-anomaly
+  namespace: insighthub
+  labels:
+    release: kps
+spec:
+  groups:
+    - name: insighthub-anomaly-recording
+      interval: 30s
+      rules:
+        # p95 LLM latency hiện tại
+        - record: insighthub:llm_latency:p95
+          expr: histogram_quantile(0.95, sum by (le) (rate(insighthub_llm_call_latency_seconds_bucket[5m])))
+        # baseline = trung bình p95 trên window dài (lab: 1h thay vì 7d — trade-off)
+        - record: insighthub:llm_latency:p95_baseline
+          expr: avg_over_time(insighthub:llm_latency:p95[1h])
+        - record: insighthub:llm_latency:p95_stddev
+          expr: stddev_over_time(insighthub:llm_latency:p95[1h])
+        # adaptive upper band = baseline + 3*stddev
+        - record: insighthub:llm_latency:p95_upper_band
+          expr: insighthub:llm_latency:p95_baseline + 3 * insighthub:llm_latency:p95_stddev
+        # queue depth band
+        - record: insighthub:queue_depth:baseline
+          expr: avg_over_time(insighthub_ingestion_queue_depth[1h])
+        - record: insighthub:queue_depth:upper_band
+          expr: insighthub:queue_depth:baseline + 3 * stddev_over_time(insighthub_ingestion_queue_depth[1h])
+    - name: insighthub-anomaly-alerting
+      rules:
+        - alert: LLMLatencyAnomaly
+          expr: insighthub:llm_latency:p95 > insighthub:llm_latency:p95_upper_band
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "LLM latency p95 vượt anomaly band"
+            description: "p95={{ $value }}s vượt upper band (baseline+3σ)."
+        - alert: IngestionQueueAnomaly
+          expr: insighthub_ingestion_queue_depth > insighthub:queue_depth:upper_band
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Ingestion queue depth bất thường"

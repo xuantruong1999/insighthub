@@ -1,0 +1,31 @@
+{
+  "incident_id": "incident-2-queue-backlog",
+  "data_source": "illustrative",
+  "note": "Giá trị metric dưới đây là MINH HOẠ (expected), KHÔNG phải số đo thật từ cluster. Khi chạy live (scale worker=0 + upload nhiều doc), thay bằng giá trị Prometheus quan sát được rồi đổi data_source thành 'observed'.",
+  "detected_at": "2026-06-09T00:00:00Z",
+  "symptom": "Documents kẹt trạng thái pending; queue depth tăng đơn điệu.",
+  "affected_service": "ingestion-worker",
+  "injection_method": "kubectl scale deployment ingestion-worker --replicas=0, sau đó upload 10 document.",
+  "queries_used": [
+    "insighthub_ingestion_queue_depth",
+    "insighthub:queue_depth:upper_band",
+    "insighthub_documents_total{status=\"pending\"}"
+  ],
+  "metrics_observed": {
+    "insighthub_ingestion_queue_depth": "10 (illustrative)",
+    "insighthub:queue_depth:upper_band": "1.5 (illustrative)",
+    "insighthub_documents_total{status=\"pending\"}": "10 (illustrative)"
+  },
+  "top_hypotheses": [
+    {
+      "hypothesis": "Ingestion worker dừng/scale=0 nên không dequeue job.",
+      "confidence": 0.95,
+      "evidence": [
+        "insighthub_ingestion_queue_depth tăng đơn điệu không giảm (10 > upper_band 1.5, illustrative)",
+        "documents_total{status=pending} tăng, status=ready đứng yên",
+        "kubectl: ingestion-worker replicas=0"
+      ]
+    }
+  ],
+  "recommended_fix": "Scale worker trở lại (>=1); thêm HPA theo queue depth; alert IngestionQueueAnomaly."
+}

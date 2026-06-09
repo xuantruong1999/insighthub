@@ -1,0 +1,113 @@
+{
+  "__inputs": [
+    {"name": "DS_PROMETHEUS", "label": "Prometheus", "type": "datasource", "pluginId": "prometheus"}
+  ],
+  "title": "InsightHub — RED + AIOps",
+  "uid": "insighthub-red",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {"from": "now-1h", "to": "now"},
+  "panels": [
+    {
+      "id": 1,
+      "title": "RAG query rate (req/s)",
+      "type": "timeseries",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [
+        {"expr": "sum(rate(insighthub_rag_query_latency_seconds_count[5m]))", "refId": "A"}
+      ]
+    },
+    {
+      "id": 2,
+      "title": "HTTP error rate (5xx %)",
+      "type": "timeseries",
+      "datasource": "${DS_PROMETHEUS}",
+      "fieldConfig": {"defaults": {"unit": "percentunit"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [
+        {"expr": "sum(rate(insighthub_http_requests_total{status=~\"5..\"}[5m])) / sum(rate(insighthub_http_requests_total[5m]))", "refId": "A"}
+      ]
+    },
+    {
+      "id": 3,
+      "title": "RAG latency p50 (s)",
+      "type": "timeseries",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [
+        {"expr": "histogram_quantile(0.50, sum by (le) (rate(insighthub_rag_query_latency_seconds_bucket[5m])))", "refId": "A"}
+      ]
+    },
+    {
+      "id": 4,
+      "title": "RAG latency p95 (s)",
+      "type": "timeseries",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum by (le) (rate(insighthub_rag_query_latency_seconds_bucket[5m])))", "refId": "A"}
+      ]
+    },
+    {
+      "id": 5,
+      "title": "RAG latency p99 (s)",
+      "type": "timeseries",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "targets": [
+        {"expr": "histogram_quantile(0.99, sum by (le) (rate(insighthub_rag_query_latency_seconds_bucket[5m])))", "refId": "A"}
+      ]
+    },
+    {
+      "id": 6,
+      "title": "LLM call latency p95 (s)",
+      "type": "timeseries",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum by (le) (rate(insighthub_llm_call_latency_seconds_bucket[5m])))", "refId": "A"}
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Ingestion queue depth",
+      "type": "timeseries",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "targets": [
+        {"expr": "insighthub_ingestion_queue_depth", "refId": "A"}
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Documents by status",
+      "type": "timeseries",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "targets": [
+        {"expr": "insighthub_documents_total", "legendFormat": "{{status}}", "refId": "A"}
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Ingestion errors (rate/s)",
+      "type": "timeseries",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+      "targets": [
+        {"expr": "sum(rate(insighthub_ingestion_errors_total[5m]))", "refId": "A"}
+      ]
+    },
+    {
+      "id": 10,
+      "title": "LLM tokens (rate/s by direction)",
+      "type": "timeseries",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+      "targets": [
+        {"expr": "sum(rate(insighthub_llm_tokens_total[5m])) by (direction)", "legendFormat": "{{direction}}", "refId": "A"}
+      ]
+    }
+  ]
+}
