@@ -83,6 +83,9 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.9.8"
+      # NOTE: artifact-only scope — supply -var-file with real vpc_id/subnets/oidc
+      # values before enabling this against an account. Empty defaults validate but
+      # would not plan cleanly against AWS.
       - name: terraform plan
         run: |
           terraform -chdir=infra init
